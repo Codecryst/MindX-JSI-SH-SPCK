@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Journal Workspace</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="../static/styles/index.css" />
+  </head>
+  <body>
+    <div class="journal-layout">
+      <div class="journal-shell">
+        <aside class="sidebar">
+          <div class="profile-box">
+            <div id="userAvatar" class="avatar">U</div>
+            <div>
+              <div class="small text-muted">Account</div>
+              <strong id="userName">User</strong>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold">Entries</h5>
+            <button id="logoutBtn" class="btn btn-sm btn-outline-dark">Logout</button>
+          </div>
+
+          <div id="entryList" class="entry-list"></div>
+        </aside>
+
+        <main class="workspace">
+          <div class="editor-box">
+            <div class="d-flex justify-content-between align-items-center mb-3 gap-3 flex-wrap">
+              <h3 class="mb-0">Journal editor</h3>
+              <button id="newEntryBtn" class="btn btn-dark btn-main">New entry</button>
+            </div>
+
+            <form id="entryForm">
+              <div class="mb-3">
+                <label class="form-label fw-bold" for="entryHeader">Header</label>
+                <input id="entryHeader" class="form-control" type="text" placeholder="Entry title" />
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label fw-bold" for="entryContent">Story</label>
+                <textarea id="entryContent" class="form-control" placeholder="Write what happened today..."></textarea>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-dark btn-main">Save entry</button>
+                <button type="button" id="clearFormBtn" class="btn btn-outline-dark pretty-btn">Clear</button>
+              </div>
+            </form>
+
+            <div id="journalMessage" class="message-box" aria-live="polite"></div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script type="module" src="../static/scripts/user.js"></script>
+  </body>
+</html>
