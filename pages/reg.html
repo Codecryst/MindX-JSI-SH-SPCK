@@ -1,56 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-      integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
-      crossorigin="anonymous"
-    />
-    <link rel="stylesheet" href="../static/styles/index.css" />
-  </head>
-  <body class="auth-page">
-    <div class="auth-card">
-      <h2 class="mb-4 text-center fw-bold">Create account</h2>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+    <link rel="stylesheet" href="../static/styles/index.css">
+</head>
+<body class="auth-page">
+    <div class="auth-shell">
+        <div class="card auth-card">
+            <div class="card-body p-4 p-md-5">
+                <h2 class="text-center mb-2">Create account</h2>
+                <p class="text-center text-muted small mb-4">Start your journal today</p>
 
-      <form id="registerForm">
-        <div class="mb-3">
-          <label class="form-label" for="displayName">Display name</label>
-          <input id="displayName" class="form-control" type="text" placeholder="Your name" required />
+                <div id="messageBox" class="message-box" role="alert" aria-live="polite"></div>
+
+                <form id="registerForm">
+                    <div class="mb-3">
+                        <label for="displayName" class="form-label">Display name</label>
+                        <input type="text" class="form-control" id="displayName" name="displayName" placeholder="Your name" maxlength="20" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" placeholder="you@example.com" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="At least 8 characters" required>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="rememberMe" checked>
+                        <label class="form-check-label" for="rememberMe">Remember me</label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">Register</button>
+
+                    <p class="text-center mt-3 mb-0">
+                        Already have an account? <a href="login.html">Login here</a>
+                    </p>
+                </form>
+            </div>
         </div>
-
-        <div class="mb-3">
-          <label class="form-label" for="registerEmail">Email</label>
-          <input id="registerEmail" class="form-control" type="email" placeholder="you@example.com" required />
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label" for="registerPassword">Password</label>
-          <input id="registerPassword" class="form-control" type="password" placeholder="At least 8 characters" required />
-        </div>
-
-        <div class="form-check mb-3">
-          <input class="form-check-input" type="checkbox" id="rememberMe" />
-          <label class="form-check-label" for="rememberMe">Remember me</label>
-        </div>
-
-        <button class="btn btn-dark btn-main w-100" type="submit">Register</button>
-
-        <div id="registerMessage" class="message-box" aria-live="polite"></div>
-      </form>
-
-      <div class="text-center mt-3">
-        <span>Already have an account? </span>
-        <a href="login.html" class="small-link">Login</a>
-      </div>
-      <div class="text-center mt-2">
-        <a href="index.html" class="small-link">Back to home</a>
-      </div>
     </div>
 
     <script type="module" src="../static/scripts/reg.js"></script>
-  </body>
+</body>
 </html>

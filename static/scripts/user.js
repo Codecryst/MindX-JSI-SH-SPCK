@@ -2,226 +2,283 @@ import {
   auth,
   db,
   onAuthStateChanged,
+  signOut,
   doc,
   getDoc,
-  getDocs,
   collection,
+  getDocs,
   setDoc,
-  deleteDoc,
   updateDoc,
+  deleteDoc,
+  query,
+  where,
   serverTimestamp,
 } from './firebase-config.js';
 
-const userName = document.getElementById('userName');
-const userAvatar = document.getElementById('userAvatar');
-const entryList = document.getElementById('entryList');
-const entryForm = document.getElementById('entryForm');
-const entryHeaderInput = document.getElementById('entryHeader');
-const entryContentInput = document.getElementById('entryContent');
-const journalMessage = document.getElementById('journalMessage');
-const newEntryBtn = document.getElementById('newEntryBtn');
-const clearFormBtn = document.getElementById('clearFormBtn');
+// ---------- Account part ----------
+const accountAvatar = document.getElementById('accountAvatar');
+const accountName = document.getElementById('accountName');
+const dashboardLink = document.getElementById('dashboardLink');
 const logoutBtn = document.getElementById('logoutBtn');
 
-let currentUser = null;
-let selectedEntryId = null;
-
-function showMessage(message, type = 'error') {
-  journalMessage.textContent = message;
-  journalMessage.className = `message-box ${type}`;
-}
-
-function formatDisplayName(name) {
-  if (!name) return 'User';
-  return name.trim() || 'User';
-}
-
-function updateAvatar(name) {
-  const firstLetter = formatDisplayName(name).charAt(0).toUpperCase();
-  userAvatar.textContent = firstLetter;
-}
-
-async function getNextEntryNumber(uid) {
-  const snapshot = await getDocs(collection(db, "user's usage"));
-  let highest = 0;
-
-  snapshot.forEach((docSnap) => {
-    if (docSnap.id.startsWith(`${uid}_`)) {
-      const numberPart = Number(docSnap.id.split('_').pop());
-      if (!Number.isNaN(numberPart) && numberPart > highest) {
-        highest = numberPart;
-      }
+// Logout button next to the account -> end session and go to index
+if (logoutBtn !== null) {
+  logoutBtn.addEventListener('click', async function () {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.log(error);
     }
-  });
-
-  return highest + 1;
-}
-
-async function loadUserProfile(uid) {
-  const userDoc = await getDoc(doc(db, 'users', uid));
-  const profile = userDoc.exists() ? userDoc.data() : {};
-  const displayName = formatDisplayName(profile.displayName || currentUser.displayName || 'User');
-
-  userName.textContent = displayName;
-  updateAvatar(displayName);
-}
-
-async function loadEntries() {
-  entryList.innerHTML = '';
-
-  const snapshot = await getDocs(collection(db, "user's usage"));
-  const entries = [];
-
-  snapshot.forEach((docSnap) => {
-    if (docSnap.id.startsWith(`${currentUser.uid}_`)) {
-      const data = docSnap.data();
-      entries.push({
-        id: docSnap.id,
-        header: data.header || 'Untitled entry',
-        content: data.content || '',
-        createdAt: data.createdAt || null,
-      });
-    }
-  });
-
-  entries.sort((a, b) => {
-    const aTime = a.createdAt && a.createdAt.seconds ? a.createdAt.seconds : 0;
-    const bTime = b.createdAt && b.createdAt.seconds ? b.createdAt.seconds : 0;
-    return aTime - bTime;
-  });
-
-  if (!entries.length) {
-    entryList.innerHTML = '<div class="text-muted">No journal entries yet.</div>';
-    return;
-  }
-
-  entries.forEach((entry) => {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'entry-item';
-    if (selectedEntryId === entry.id) {
-      item.classList.add('active');
-    }
-
-    const labelWrap = document.createElement('div');
-    labelWrap.style.flex = '1';
-    labelWrap.style.minWidth = '0';
-
-    const title = document.createElement('div');
-    title.textContent = entry.header;
-    title.style.overflow = 'hidden';
-    title.style.textOverflow = 'ellipsis';
-    title.style.whiteSpace = 'nowrap';
-
-    const meta = document.createElement('small');
-    meta.className = 'text-muted d-block';
-    meta.textContent = entry.createdAt && entry.createdAt.seconds
-      ? new Date(entry.createdAt.seconds * 1000).toLocaleString()
-      : 'Recently created';
-
-    labelWrap.appendChild(title);
-    labelWrap.appendChild(meta);
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'delete-entry';
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.addEventListener('click', async (event) => {
-      event.stopPropagation();
-      await deleteDoc(doc(db, "user's usage", entry.id));
-      if (selectedEntryId === entry.id) {
-        clearForm();
-      }
-      await loadEntries();
-    });
-
-    item.appendChild(labelWrap);
-    item.appendChild(deleteBtn);
-
-    item.addEventListener('click', () => {
-      selectedEntryId = entry.id;
-      entryHeaderInput.value = entry.header;
-      entryContentInput.value = entry.content;
-      showMessage('Entry loaded.', 'success');
-      loadEntries();
-    });
-
-    entryList.appendChild(item);
+    window.location.href = 'index.html';
   });
 }
 
-function clearForm() {
-  selectedEntryId = null;
-  entryForm.reset();
-  showMessage('', 'success');
-}
+let currentUserId = null; // will be filled after login check
 
-newEntryBtn.addEventListener('click', () => {
-  clearForm();
-  entryHeaderInput.focus();
-});
-
-clearFormBtn.addEventListener('click', () => {
-  clearForm();
-});
-
-logoutBtn.addEventListener('click', async () => {
-  await auth.signOut();
-  window.location.href = 'login.html';
-});
-
-entryForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-
-  const header = entryHeaderInput.value.trim();
-  const content = entryContentInput.value.trim();
-
-  if (!header) {
-    showMessage('Please enter a header for the entry.', 'error');
-    return;
-  }
-
-  if (!content) {
-    showMessage('Please write some content before saving.', 'error');
-    return;
-  }
-
-  try {
-    if (selectedEntryId) {
-      await updateDoc(doc(db, "user's usage", selectedEntryId), {
-        header,
-        content,
-        updatedAt: serverTimestamp(),
-      });
-      showMessage('Entry updated successfully.', 'success');
-    } else {
-      const nextNumber = await getNextEntryNumber(currentUser.uid);
-      const docId = `${currentUser.uid}_${nextNumber}`;
-
-      await setDoc(doc(db, "user's usage", docId), {
-        header,
-        content,
-        createdAt: serverTimestamp(),
-      });
-
-      selectedEntryId = docId;
-      showMessage('New entry saved successfully.', 'success');
-    }
-
-    await loadEntries();
-  } catch (error) {
-    console.error(error);
-    showMessage('Something went wrong while saving the entry.', 'error');
-  }
-});
-
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
+// Check if the user is logged in.
+// If not logged in -> send them back to login.html
+onAuthStateChanged(auth, async function (user) {
+  if (user === null) {
     window.location.href = 'login.html';
     return;
   }
 
-  currentUser = user;
-  await loadUserProfile(user.uid);
-  await loadEntries();
+  currentUserId = user.uid;
+
+  // Read the user profile from Firestore to show the display name
+  let name = user.email;
+  try {
+    const snapshot = await getDoc(doc(db, 'users', user.uid));
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      if (data.displayName) {
+        name = data.displayName;
+      }
+      // Small link back to dashboard, only for admins
+      let raw = data.roleId;
+      if (raw === undefined || raw === null || raw === '') {
+        raw = data.role;
+      }
+      if (typeof raw === 'string' && (raw.trim().toLowerCase() === 'admin' || raw.trim().toLowerCase() === 'administrator')) {
+        if (dashboardLink !== null) {
+          dashboardLink.classList.remove('d-none');
+        }
+      }
+    }
+  } catch (error) {
+    console.log('Cannot read user profile:', error);
+  }
+
+  accountName.textContent = name;
+  accountName.title = name;
+  accountAvatar.textContent = name.charAt(0).toUpperCase();
+
+  try {
+    await loadEntries();
+  } catch (error) {
+    console.log('Cannot load entries:', error);
+  }
+  renderEntries();
+});
+
+// ---------- Entries part ----------
+// Every entry is one document inside the "userUsage" collection.
+// Document name: userId_entryNumber  (example: abc123_1)
+// Fields: header, content, createdAt (timestamp), uid
+const entriesList = document.getElementById('entriesList');
+const newEntryBtn = document.getElementById('newEntryBtn');
+const clearEditorBtn = document.getElementById('clearEditorBtn');
+const saveEntryBtn = document.getElementById('saveEntryBtn');
+const entryHeader = document.getElementById('entryHeader');
+const entryContent = document.getElementById('entryContent');
+
+let myEntries = []; // entries of this user, loaded from Firebase
+let selectedId = null; // document name of the entry currently open
+
+// Load this user's entries from the "userUsage" collection
+async function loadEntries() {
+  const foundQuery = query(collection(db, 'userUsage'), where('uid', '==', currentUserId));
+  const snapshot = await getDocs(foundQuery);
+
+  myEntries = [];
+  snapshot.forEach(function (oneDoc) {
+    const data = oneDoc.data();
+    myEntries.push({
+      id: oneDoc.id, // example: "abc123_1"
+      header: data.header,
+      content: data.content,
+      createdAt: data.createdAt,
+    });
+  });
+
+  // Show newest first
+  myEntries.sort(function (a, b) {
+    return entryTime(b) - entryTime(a);
+  });
+}
+
+// Turn the timestamp field into a JS date in milliseconds
+function entryTime(entry) {
+  if (entry.createdAt && typeof entry.createdAt.toDate === 'function') {
+    return entry.createdAt.toDate().getTime();
+  }
+  return 0;
+}
+
+// Draw the entry list on the left side
+function renderEntries() {
+  entriesList.innerHTML = '';
+
+  if (myEntries.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'text-muted small';
+    empty.textContent = 'No entries yet. Write your first note!';
+    entriesList.appendChild(empty);
+    return;
+  }
+
+  myEntries.forEach(function (entry) {
+    // One entry card
+    const item = document.createElement('div');
+    item.className = 'journal-item';
+    if (entry.id === selectedId) {
+      item.classList.add('active');
+    }
+
+    const title = document.createElement('h5');
+    title.className = 'journal-item-title';
+    title.textContent = entry.header === '' || entry.header === undefined ? 'Untitled' : entry.header;
+
+    const date = document.createElement('span');
+    date.className = 'journal-item-date';
+    const createdDate = entry.createdAt && typeof entry.createdAt.toDate === 'function' ? entry.createdAt.toDate() : null;
+    date.textContent = createdDate === null ? '' : createdDate.toLocaleString();
+
+    // Small delete button
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'delete-entry';
+    delBtn.textContent = '\u00d7';
+    delBtn.addEventListener('click', function (event) {
+      event.stopPropagation(); // do not open the entry when deleting
+      deleteEntry(entry.id);
+    });
+
+    item.appendChild(title);
+    item.appendChild(date);
+    item.appendChild(delBtn);
+
+    // Click on the card to open it in the editor
+    item.addEventListener('click', function () {
+      openEntry(entry.id);
+    });
+
+    entriesList.appendChild(item);
+  });
+}
+
+// Open one entry in the editor
+function openEntry(id) {
+  selectedId = id;
+
+  for (let i = 0; i < myEntries.length; i++) {
+    if (myEntries[i].id === id) {
+      entryHeader.value = myEntries[i].header;
+      entryContent.value = myEntries[i].content;
+    }
+  }
+
+  renderEntries();
+}
+
+// Delete one entry (removes the document from Firebase)
+async function deleteEntry(id) {
+  const confirmed = confirm('Delete this entry?');
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await deleteDoc(doc(db, 'userUsage', id));
+
+    if (selectedId === id) {
+      clearEditor();
+    } else {
+      await loadEntries();
+      renderEntries();
+    }
+  } catch (error) {
+    console.log(error);
+    alert('Could not delete the entry.');
+  }
+}
+
+// Empty the editor and forget the selected entry
+function clearEditor() {
+  selectedId = null;
+  entryHeader.value = '';
+  entryContent.value = '';
+  renderEntries();
+}
+
+// Check if we already used a document name like "userId_3"
+function isIdUsed(id) {
+  for (let i = 0; i < myEntries.length; i++) {
+    if (myEntries[i].id === id) {
+      return true;
+    }
+  }
+  return false;
+}
+
+newEntryBtn.addEventListener('click', clearEditor);
+clearEditorBtn.addEventListener('click', clearEditor);
+
+saveEntryBtn.addEventListener('click', async function () {
+  if (currentUserId === null) {
+    alert('Please wait, still loading...');
+    return;
+  }
+
+  const header = entryHeader.value.trim();
+  const content = entryContent.value.trim();
+
+  if (header === '' && content === '') {
+    alert('Please write something before saving.');
+    return;
+  }
+
+  try {
+    if (selectedId === null) {
+      // Save a brand new entry.
+      // Find a free entry number: 1, 2, 3, ...
+      let entryNumber = myEntries.length + 1;
+      while (isIdUsed(currentUserId + '_' + entryNumber) === true) {
+        entryNumber = entryNumber + 1;
+      }
+
+      const docName = currentUserId + '_' + entryNumber;
+
+      await setDoc(doc(db, 'userUsage', docName), {
+        uid: currentUserId,
+        header: header,
+        content: content,
+        createdAt: serverTimestamp(),
+      });
+
+      selectedId = docName;
+    } else {
+      // Update the entry that is currently open (createdAt stays the same)
+      await updateDoc(doc(db, 'userUsage', selectedId), {
+        header: header,
+        content: content,
+      });
+    }
+
+    await loadEntries();
+    renderEntries();
+  } catch (error) {
+    console.log(error.code, error.message);
+    alert('Could not save the entry. Check your internet / Firestore rules.');
+  }
 });

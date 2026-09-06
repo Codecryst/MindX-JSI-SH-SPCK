@@ -2,89 +2,107 @@ import {
   auth,
   db,
   createUserWithEmailAndPassword,
-  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
   doc,
   setDoc,
   serverTimestamp,
 } from './firebase-config.js';
+import { startInactivityTimer } from './inactivity.js';
 
-import {
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-
+// Get the elements from the page
 const form = document.getElementById('registerForm');
-const displayNameInput = document.getElementById('displayName');
-const emailInput = document.getElementById('registerEmail');
-const passwordInput = document.getElementById('registerPassword');
-const rememberCheck = document.getElementById('rememberMe');
-const messageBox = document.getElementById('registerMessage');
+const messageBox = document.getElementById('messageBox');
 
-function showMessage(message, type = 'error') {
-  messageBox.textContent = message;
-  messageBox.className = `message-box ${type}`;
+// Small helper to show a message (uses .show .error .success classes)
+function showMessage(text, type) {
+  messageBox.textContent = text;
+  messageBox.className = 'message-box show ' + type;
 }
 
-function isValidEmail(email) {
-  return /\S+@\S+\.\S+/.test(email);
-}
-
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    window.location.href = 'user.html';
+// 15 minute inactivity timeout: clear password and warn the user
+startInactivityTimer(function () {
+  const passwordInput = document.getElementById('password');
+  if (passwordInput !== null) {
+    passwordInput.value = '';
   }
+  showMessage('Timed out after 15 minutes of inactivity. Please try again.', 'error');
 });
 
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
+form.addEventListener('submit', async function (event) {
+  event.preventDefault(); // stop the page from reloading
 
-  const displayName = displayNameInput.value.trim();
-  const email = emailInput.value.trim();
-  const password = passwordInput.value;
+  // 1. Read what the user typed
+  const displayName = document.getElementById('displayName').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
 
-  if (!displayName || displayName.length < 2 || displayName !== displayName.replace(/\s+/g, ' ').trim()) {
-    showMessage('Display name is required and cannot contain too many spaces.', 'error');
+  // 2. Simple checks
+  if (displayName === '' || email === '' || password === '') {
+    showMessage('Please fill in all fields.', 'error');
     return;
   }
-
-  if (!email || !isValidEmail(email)) {
-    showMessage('Email format is invalid.', 'error');
+  if (displayName.length > 20) {
+    showMessage('Display name must be 20 characters or less.', 'error');
     return;
   }
-
-  if (!password || password.length < 8) {
-    showMessage('Password must be at least 8 characters long.', 'error');
+  if (password.length < 6) {
+    showMessage('Password must be at least 6 characters.', 'error');
     return;
   }
 
   try {
-    await setPersistence(auth, rememberCheck.checked ? browserLocalPersistence : browserSessionPersistence);
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    // 3. Choose how long Firebase keeps this login
+    const rememberMe = document.getElementById('rememberMe').checked;
+    if (rememberMe === true) {
+      // Remembered: stays logged in even after closing the browser
+      await setPersistence(auth, browserLocalPersistence);
+    } else {
+      // Session only: logged out when the browser is closed
+      await setPersistence(auth, browserSessionPersistence);
+    }
 
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
-      uid: userCredential.user.uid,
-      displayName,
-      email: email.toLowerCase(),
+    // 4. Create the account in Firebase Authentication
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    // 5. Save the user info into the "users" collection in Firestore
+    //    (this is why you see the new user in the Firebase console)
+    await setDoc(doc(db, 'users', user.uid), {
+      uid: user.uid,
+      email: email,
+      displayName: displayName,
       roleId: 'customer',
       createdAt: serverTimestamp(),
     });
 
-    showMessage('Registration successful! Redirecting...', 'success');
-    setTimeout(() => {
-      window.location.href = 'user.html';
-    }, 700);
-  } catch (error) {
-    const code = error.code || '';
-
-    if (code === 'auth/email-already-in-use') {
-      showMessage('This email is already registered. Please log in instead.', 'error');
-    } else if (code === 'auth/weak-password') {
-      showMessage('Password is too weak. Use at least 8 characters.', 'error');
-    } else if (code === 'auth/invalid-email') {
-      showMessage('Email format is invalid.', 'error');
+    // 6. Save or remove the saved account depending on the checkbox
+    const account = { email: email, password: password };
+    if (rememberMe === true) {
+      localStorage.setItem('mindlog_account', JSON.stringify(account));
+      sessionStorage.removeItem('mindlog_account');
     } else {
-      showMessage('Registration failed. Please try again.', 'error');
+      sessionStorage.setItem('mindlog_account', JSON.stringify(account));
+      localStorage.removeItem('mindlog_account');
+    }
+
+    // 7. Tell the user and go to user.html
+    showMessage('Account created! Redirecting...', 'success');
+    setTimeout(function () {
+      window.location.href = 'user.html';
+    }, 800);
+  } catch (error) {
+    console.log(error.code, error.message);
+
+    if (error.code === 'auth/email-already-in-use') {
+      showMessage('This email already has an account.', 'error');
+    } else if (error.code === 'auth/invalid-email') {
+      showMessage('Please enter a valid email.', 'error');
+    } else if (error.code === 'auth/weak-password') {
+      showMessage('Password must be at least 6 characters.', 'error');
+    } else {
+      showMessage('Register failed: ' + error.message, 'error');
     }
   }
 });

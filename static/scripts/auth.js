@@ -26,7 +26,6 @@ export async function registerUser({ email, password, displayName }) {
       email,
       displayName,
       roleId: 'customer',
-      walletBalance: 0,
       // createdAt: serverTimestamp(),
     });
   } catch (profileError) {

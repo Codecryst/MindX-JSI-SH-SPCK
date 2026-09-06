@@ -1,84 +1,107 @@
 import {
   auth,
   db,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
   doc,
   getDoc,
-} from './firebase-config.js';
-
-import {
+  signInWithEmailAndPassword,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+} from './firebase-config.js';
+import { startInactivityTimer } from './inactivity.js';
 
+// Get the elements from the page
 const form = document.getElementById('loginForm');
-const emailInput = document.getElementById('loginEmail');
-const passwordInput = document.getElementById('loginPassword');
-const rememberCheck = document.getElementById('rememberMe');
-const messageBox = document.getElementById('loginMessage');
+const messageBox = document.getElementById('messageBox');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const rememberMeBox = document.getElementById('rememberMe');
 
-function showMessage(message, type = 'error') {
-  messageBox.textContent = message;
-  messageBox.className = `message-box ${type}`;
+// Small helper to show a message (uses .show .error .success classes)
+function showMessage(text, type) {
+  messageBox.textContent = text;
+  messageBox.className = 'message-box show ' + type;
 }
 
-function isValidEmail(email) {
-  return /\S+@\S+\.\S+/.test(email);
-}
-
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    window.location.href = 'user.html';
-  }
+// 15 minute inactivity timeout: clear password and warn the user
+startInactivityTimer(function () {
+  passwordInput.value = '';
+  showMessage('Timed out after 15 minutes of inactivity. Please try again.', 'error');
 });
 
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
+// When the login page opens: if we remembered the account before,
+// put it back into the form so the user does not have to type again.
+const savedAccount = localStorage.getItem('mindlog_account');
+if (savedAccount !== null) {
+  const account = JSON.parse(savedAccount);
+  emailInput.value = account.email;
+  passwordInput.value = account.password;
+  rememberMeBox.checked = true;
+}
 
+form.addEventListener('submit', async function (event) {
+  event.preventDefault(); // stop the page from reloading
+
+  // 1. Read what the user typed
   const email = emailInput.value.trim();
   const password = passwordInput.value;
-
-  if (!email || !isValidEmail(email)) {
-    showMessage('Email format is invalid.', 'error');
-    return;
-  }
-
-  if (!password || password.length < 8) {
-    showMessage('Password must be at least 8 characters long.', 'error');
-    return;
-  }
+  const rememberMe = rememberMeBox.checked;
 
   try {
-    await setPersistence(auth, rememberCheck.checked ? browserLocalPersistence : browserSessionPersistence);
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-
-    const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-
-    if (userDoc.exists()) {
-      showMessage('Login successful! Redirecting...', 'success');
-      setTimeout(() => {
-        window.location.href = 'user.html';
-      }, 500);
-      return;
+    // 2. Choose how long Firebase keeps this login
+    if (rememberMe === true) {
+      // Remembered: stays logged in even after closing the browser
+      await setPersistence(auth, browserLocalPersistence);
+    } else {
+      // Session only: logged out when the browser is closed
+      await setPersistence(auth, browserSessionPersistence);
     }
 
-    showMessage('This account is missing a profile. Please contact support.', 'error');
-    await auth.signOut();
-  } catch (error) {
-    const code = error.code || '';
+    // 3. Sign in with Firebase Authentication
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
-    if (code === 'auth/user-not-found') {
-      showMessage('Account not found. Please register first.', 'error');
-    } else if (code === 'auth/wrong-password') {
-      showMessage('Wrong password. Please try again.', 'error');
-    } else if (code === 'auth/invalid-email') {
-      showMessage('Email format is invalid.', 'error');
-    } else if (code === 'auth/invalid-credential') {
-      showMessage('Email or password is incorrect.', 'error');
+    // 4. Save or remove the saved account depending on the checkbox
+    const account = { email: email, password: password };
+    if (rememberMe === true) {
+      // localStorage survives closing the website, so the account
+      // is loaded again every time the site is visited
+      localStorage.setItem('mindlog_account', JSON.stringify(account));
+      sessionStorage.removeItem('mindlog_account');
     } else {
-      showMessage('Login failed. Please try again.', 'error');
+      // sessionStorage only lives for this visit (gone when browser closes)
+      sessionStorage.setItem('mindlog_account', JSON.stringify(account));
+      localStorage.removeItem('mindlog_account');
+    }
+
+    // 5. Go to the right page: admins to admin.html, others to user.html
+    let nextPage = 'user.html';
+    try {
+      const profile = await getDoc(doc(db, 'users', userCredential.user.uid));
+      if (profile.exists()) {
+        const data = profile.data();
+        let raw = data.roleId;
+        if (raw === undefined || raw === null || raw === '') {
+          raw = data.role;
+        }
+        if (typeof raw === 'string' && (raw.trim().toLowerCase() === 'admin' || raw.trim().toLowerCase() === 'administrator')) {
+          nextPage = 'admin.html';
+        }
+      }
+    } catch (error) {
+      console.log('Cannot read role, going to user page:', error);
+    }
+
+    showMessage('Login successful! Redirecting...', 'success');
+    setTimeout(function () {
+      window.location.href = nextPage;
+    }, 800);
+  } catch (error) {
+    console.log(error.code, error.message);
+
+    if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+      showMessage('Wrong email or password.', 'error');
+    } else {
+      showMessage('Login failed: ' + error.message, 'error');
     }
   }
 });
