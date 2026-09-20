@@ -35,6 +35,25 @@ if (logoutBtn !== null) {
 
 let currentUserId = null; // will be filled after login check
 
+// A user is roleId "user".
+function getRoleText(data) {
+  // Step 1: no profile data means user.
+  if (data === null || data === undefined) {
+    return 'user';
+  }
+  // Step 2: read only the roleId field.
+  let raw = data.roleId;
+  // Step 3: only text can be a role, else user.
+  if (typeof raw !== 'string') {
+    return 'user';
+  }
+  return raw.trim().toLowerCase();
+}
+
+function isAdminRole(roleText) {
+  return roleText === 'admin' || roleText === 'administrator';
+}
+
 // Check if the user is logged in.
 // If not logged in -> send them back to login.html
 onAuthStateChanged(auth, async function (user) {
@@ -48,22 +67,29 @@ onAuthStateChanged(auth, async function (user) {
   // Read the user profile from Firestore to show the display name
   let name = user.email;
   try {
-    const snapshot = await getDoc(doc(db, 'users', user.uid));
-    if (snapshot.exists()) {
-      const data = snapshot.data();
-      if (data.displayName) {
-        name = data.displayName;
+    const profileDoc = await getDoc(doc(db, 'users', user.uid));
+    if (!profileDoc.exists()) {
+      // Glitch means Auth exists but no users doc, so treat as logged out.
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.log(error);
       }
-      // Small link back to dashboard, only for admins
-      let raw = data.roleId;
-      if (raw === undefined || raw === null || raw === '') {
-        raw = data.role;
+      window.location.href = 'login.html';
+      return;
+    }
+    const data = profileDoc.data();
+    if (data.displayName) {
+      name = data.displayName;
+    }
+    // Small link back to dashboard, only for admins
+    let roleText = getRoleText(data);
+    if (isAdminRole(roleText)) {
+      if (dashboardLink !== null) {
+        dashboardLink.classList.remove('d-none');
       }
-      if (typeof raw === 'string' && (raw.trim().toLowerCase() === 'admin' || raw.trim().toLowerCase() === 'administrator')) {
-        if (dashboardLink !== null) {
-          dashboardLink.classList.remove('d-none');
-        }
-      }
+    } else {
+      // Regular user, dashboard link stays hidden.
     }
   } catch (error) {
     console.log('Cannot read user profile:', error);
@@ -98,10 +124,10 @@ let selectedId = null; // document name of the entry currently open
 // Load this user's entries from the "userUsage" collection
 async function loadEntries() {
   const foundQuery = query(collection(db, 'userUsage'), where('uid', '==', currentUserId));
-  const snapshot = await getDocs(foundQuery);
+  const entriesSnapshot = await getDocs(foundQuery);
 
   myEntries = [];
-  snapshot.forEach(function (oneDoc) {
+  entriesSnapshot.forEach(function (oneDoc) {
     const data = oneDoc.data();
     myEntries.push({
       id: oneDoc.id, // example: "abc123_1"
@@ -113,6 +139,7 @@ async function loadEntries() {
 
   // Show newest first
   myEntries.sort(function (a, b) {
+    // Minus returns newest first.
     return entryTime(b) - entryTime(a);
   });
 }
@@ -137,7 +164,13 @@ function renderEntries() {
     return;
   }
 
+  let drawnCount = 0;
+
   myEntries.forEach(function (entry) {
+    // No header and no content means no data, so skip this card
+    if ((entry.header === undefined || entry.header === null || entry.header === '') && (entry.content === undefined || entry.content === null || entry.content === '')) {
+      return;
+    }
     // One entry card
     const item = document.createElement('div');
     item.className = 'journal-item';
@@ -147,18 +180,29 @@ function renderEntries() {
 
     const title = document.createElement('h5');
     title.className = 'journal-item-title';
-    title.textContent = entry.header === '' || entry.header === undefined ? 'Untitled' : entry.header;
+    // Default title when the header is missing.
+    let titleText = 'Untitled';
+    if (entry.header !== undefined && entry.header !== null && entry.header !== '') {
+      titleText = entry.header;
+    }
+    title.textContent = titleText;
 
     const date = document.createElement('span');
     date.className = 'journal-item-date';
-    const createdDate = entry.createdAt && typeof entry.createdAt.toDate === 'function' ? entry.createdAt.toDate() : null;
-    date.textContent = createdDate === null ? '' : createdDate.toLocaleString();
+    // entryTime already unwraps the Firestore Timestamp.
+    let timeNumber = entryTime(entry);
+    let dateText = '';
+    if (timeNumber !== 0) {
+      dateText = new Date(timeNumber).toLocaleString();
+    }
+    date.textContent = dateText;
 
     // Small delete button
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'delete-entry';
-    delBtn.textContent = '\u00d7';
+    // Close icon.
+    delBtn.textContent = '×';
     delBtn.addEventListener('click', function (event) {
       event.stopPropagation(); // do not open the entry when deleting
       deleteEntry(entry.id);
@@ -174,7 +218,16 @@ function renderEntries() {
     });
 
     entriesList.appendChild(item);
+    drawnCount = drawnCount + 1;
   });
+
+  if (drawnCount === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'text-muted small';
+    empty.textContent = 'No entries yet. Write your first note!';
+    entriesList.appendChild(empty);
+    return;
+  }
 }
 
 // Open one entry in the editor
@@ -194,7 +247,7 @@ function openEntry(id) {
 // Delete one entry (removes the document from Firebase)
 async function deleteEntry(id) {
   const confirmed = confirm('Delete this entry?');
-  if (!confirmed) {
+  if (confirmed === false) {
     return;
   }
 
@@ -253,7 +306,7 @@ saveEntryBtn.addEventListener('click', async function () {
       // Save a brand new entry.
       // Find a free entry number: 1, 2, 3, ...
       let entryNumber = myEntries.length + 1;
-      while (isIdUsed(currentUserId + '_' + entryNumber) === true) {
+      while (isIdUsed(currentUserId + '_' + entryNumber)) {
         entryNumber = entryNumber + 1;
       }
 

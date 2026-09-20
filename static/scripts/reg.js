@@ -9,7 +9,6 @@ import {
   setDoc,
   serverTimestamp,
 } from './firebase-config.js';
-import { startInactivityTimer } from './inactivity.js';
 
 // Get the elements from the page
 const form = document.getElementById('registerForm');
@@ -21,14 +20,29 @@ function showMessage(text, type) {
   messageBox.className = 'message-box show ' + type;
 }
 
-// 15 minute inactivity timeout: clear password and warn the user
-startInactivityTimer(function () {
-  const passwordInput = document.getElementById('password');
-  if (passwordInput !== null) {
-    passwordInput.value = '';
+// Must have: 8 chars, 1 capital, 1 lowercase, 1 number, 1 symbol.
+function checkPassword(password) {
+  if (password.length < 8) {
+    return 'Password must be at least 8 characters.';
   }
-  showMessage('Timed out after 15 minutes of inactivity. Please try again.', 'error');
-});
+  // Check for a capital letter from A to Z
+  if (/[A-Z]/.test(password) === false) {
+    return 'Password must have at least 1 capital letter.';
+  }
+  // Check for a lowercase letter from a to z
+  if (/[a-z]/.test(password) === false) {
+    return 'Password must have at least 1 lowercase letter.';
+  }
+  // Check for a digit from 0 to 9
+  if (/[0-9]/.test(password) === false) {
+    return 'Password must have at least 1 number.';
+  }
+  // Check for a symbol, which means anything that is not a letter or digit
+  if (/[^A-Za-z0-9]/.test(password) === false) {
+    return 'Password must have at least 1 symbol (example: ! @ # $).';
+  }
+  return '';
+}
 
 form.addEventListener('submit', async function (event) {
   event.preventDefault(); // stop the page from reloading
@@ -39,7 +53,11 @@ form.addEventListener('submit', async function (event) {
   const password = document.getElementById('password').value;
 
   // 2. Simple checks
-  if (displayName === '' || email === '' || password === '') {
+  if (displayName === '') {
+    showMessage('Please enter a display name.', 'error');
+    return;
+  }
+  if (email === '' || password === '') {
     showMessage('Please fill in all fields.', 'error');
     return;
   }
@@ -47,8 +65,9 @@ form.addEventListener('submit', async function (event) {
     showMessage('Display name must be 20 characters or less.', 'error');
     return;
   }
-  if (password.length < 6) {
-    showMessage('Password must be at least 6 characters.', 'error');
+  const passwordError = checkPassword(password);
+  if (passwordError !== '') {
+    showMessage(passwordError, 'error');
     return;
   }
 
@@ -73,7 +92,7 @@ form.addEventListener('submit', async function (event) {
       uid: user.uid,
       email: email,
       displayName: displayName,
-      roleId: 'customer',
+      roleId: 'user',
       createdAt: serverTimestamp(),
     });
 

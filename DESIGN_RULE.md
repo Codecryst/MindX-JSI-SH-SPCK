@@ -567,3 +567,25 @@ If only a compact instruction is needed, use this:
 
 
 #USE SIMPLE STUDENT LEVEL LOGIC AND SCRIPTING
+
+# 23. Simple Student-Level Logic and Scripting
+
+Use super easy to understand logic and code.
+
+Characteristics:
+
+- Use easy, simple, beginner-level JavaScript.
+- Use plain, straightforward functions with clear names.
+- Use basic `if` / `else` and basic loops.
+- Keep each function small and doing one simple thing.
+- Use simple variables, simple conditions, and step-by-step logic.
+- Keep scripting as simple as a student would write, while still functional.
+
+Avoid:
+
+- Clever, complex, or advanced patterns.
+- Hard-to-read one-liners, nested tricks, or fancy syntax.
+- Deep abstraction, over-engineered helpers, or unnecessary frameworks.
+- Complicated async flows, complex state management, or advanced design patterns when simple code is enough.
+
+The code should look like it was written by a competent beginner: simple, direct, a little repetitive when needed, but working.

@@ -29,30 +29,41 @@ let allUsers = []; // every account from the "users" collection
 let allEntries = []; // every entry from the "userUsage" collection
 let currentUid = null; // uid of the admin who is logged in now
 
-// Simple student-level helper: accept the common ways a role can be stored.
-// Accepts "admin" and "administrator", any case, from roleId / role / userRole / isAdmin.
+// Tiny helper: true only when a value is real text (not empty, not missing).
+// Returns false for undefined, null, or empty string, else true.
+function hasText(value) {
+  // Empty or missing means no real text.
+  if (value === undefined || value === null || value === '') {
+    return false;
+  }
+  // Spaces only is also no real text.
+  if (typeof value === 'string' && value.trim() === '') {
+    return false;
+  }
+  return true;
+}
+
+// A user is roleId "user".
 function getRoleText(data) {
-  if (data === null || data === undefined) {
-    return 'customer';
+  // Step 1: no profile data means user.
+  if (hasText(data) === false) {
+    return 'user';
   }
+  // Step 2: read only the roleId field.
   let raw = data.roleId;
-  if (raw === undefined || raw === null || raw === '') {
-    raw = data.role;
-  }
-  if (raw === undefined || raw === null || raw === '') {
-    raw = data.userRole;
-  }
-  if ((raw === undefined || raw === null || raw === '') && data.isAdmin === true) {
-    return 'admin';
-  }
+  // Step 3: only text can be a role, else user.
   if (typeof raw !== 'string') {
-    return 'customer';
+    return 'user';
   }
   return raw.trim().toLowerCase();
 }
 
 function isAdminRole(roleText) {
   return roleText === 'admin' || roleText === 'administrator';
+}
+
+function isUserRole(roleText) {
+  return roleText === 'user';
 }
 
 // If the admin is not logged in -> send them back to login.html
@@ -66,13 +77,14 @@ onAuthStateChanged(auth, async function (user) {
 
   // Read the current account profile so we can check the role
   let name = user.email;
-  let role = 'customer';
+  let role = 'user';
   let profileFound = false;
   try {
-    const snapshot = await getDoc(doc(db, 'users', user.uid));
-    if (snapshot.exists()) {
+    // profileDoc is the user profile document loaded from Firebase.
+    const profileDoc = await getDoc(doc(db, 'users', user.uid));
+    if (profileDoc.exists()) {
       profileFound = true;
-      const data = snapshot.data();
+      const data = profileDoc.data();
       if (data.displayName) {
         name = data.displayName;
       }
@@ -84,9 +96,14 @@ onAuthStateChanged(auth, async function (user) {
 
   adminGreeting.textContent = name;
 
-  // Missing profile -> explain instead of a plain "regular user" message
+  // Glitch means Auth exists but no users doc, so treat as logged out.
   if (profileFound === false) {
-    showDeniedView(name, 'missing profile');
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.log('Cannot sign out:', error);
+    }
+    window.location.href = 'login.html';
     return;
   }
 
@@ -128,10 +145,11 @@ function showDeniedView(name, role) {
   restrictedBanner.className = 'message-box show error';
   accessLine.textContent = 'Only admin accounts can view and change user data. Your display name is not your role.';
 
-  statUsers.textContent = '\u2014';
-  statEntries.textContent = '\u2014';
-  statWriters.textContent = '\u2014';
-  statToday.textContent = '\u2014';
+  // Hidden until admin access: show a plain dash instead of numbers.
+  statUsers.textContent = '-';
+  statEntries.textContent = '-';
+  statWriters.textContent = '-';
+  statToday.textContent = '-';
 
   usersTableBody.innerHTML =
     '<tr><td colspan="6" class="text-danger">Admin access required to see users.</td></tr>';
@@ -147,13 +165,23 @@ async function loadAdminData() {
   allUsers = [];
   usersSnapshot.forEach(function (oneDoc) {
     const data = oneDoc.data();
+    let userUid = oneDoc.id;
+    // Use the stored uid only when it has real text.
+    if (hasText(data.uid)) {
+      userUid = data.uid;
+    }
+    let userCreatedAt = null;
+    // Keep the stored date only when it has a real value.
+    if (hasText(data.createdAt)) {
+      userCreatedAt = data.createdAt;
+    }
     allUsers.push({
       id: oneDoc.id,
-      uid: data.uid || oneDoc.id,
+      uid: userUid,
       email: data.email,
       displayName: data.displayName,
       roleId: getRoleText(data),
-      createdAt: data.createdAt || null,
+      createdAt: userCreatedAt,
     });
   });
 
@@ -212,13 +240,17 @@ function renderStats() {
   statEntries.textContent = allEntries.length;
 
   // Count how many different users wrote at least one entry
-  const writerIds = {};
-  allEntries.forEach(function (entry) {
-    if (entry.uid) {
-      writerIds[entry.uid] = true;
+  const writerIds = [];
+  for (let i = 0; i < allEntries.length; i++) {
+    const writerUid = allEntries[i].uid;
+    // Count it only when the writer id has real text.
+    if (hasText(writerUid)) {
+      if (writerIds.includes(writerUid) === false) {
+        writerIds.push(writerUid);
+      }
     }
-  });
-  statWriters.textContent = Object.keys(writerIds).length;
+  }
+  statWriters.textContent = writerIds.length;
 
   // Count entries created on the current local day
   const today = new Date().toLocaleDateString();
@@ -245,6 +277,20 @@ function countEntriesForUser(uid) {
   return count;
 }
 
+// Pick the name used for sorting: displayName first, then email, else empty text.
+function getSortName(userRecord) {
+  // Step 1: use displayName when it has real text.
+  if (hasText(userRecord.displayName)) {
+    return userRecord.displayName;
+  }
+  // Step 2: fall back to email when displayName is empty.
+  if (hasText(userRecord.email)) {
+    return userRecord.email;
+  }
+  // Step 3: no name at all, so sort as empty text.
+  return '';
+}
+
 // ---------- Users table part ----------
 function renderUsersTable() {
   usersTableBody.innerHTML = '';
@@ -258,9 +304,18 @@ function renderUsersTable() {
 
   // Simple alphabetical order by name
   const sortedUsers = allUsers.slice().sort(function (a, b) {
-    const nameA = (a.displayName || a.email || '').toLowerCase();
-    const nameB = (b.displayName || b.email || '').toLowerCase();
-    return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
+    const nameA = getSortName(a).toLowerCase();
+    const nameB = getSortName(b).toLowerCase();
+    // The sort function returns -1 when A comes first.
+    if (nameA < nameB) {
+      return -1;
+    }
+    // It returns 1 when B comes first.
+    if (nameA > nameB) {
+      return 1;
+    }
+    // It returns 0 when both names are equal.
+    return 0;
   });
 
   sortedUsers.forEach(function (userRecord, index) {
@@ -271,7 +326,12 @@ function renderUsersTable() {
 
     const nameCell = document.createElement('td');
     const nameStrong = document.createElement('strong');
-    nameStrong.textContent = userRecord.displayName || 'Unnamed user';
+    let showName = 'Unnamed user';
+    // Use the display name only when it has real text.
+    if (hasText(userRecord.displayName)) {
+      showName = userRecord.displayName;
+    }
+    nameStrong.textContent = showName;
     nameStrong.style.cursor = 'pointer';
     nameStrong.style.textDecoration = 'underline';
     nameStrong.title = 'Click to view user fields';
@@ -281,11 +341,21 @@ function renderUsersTable() {
     nameCell.appendChild(nameStrong);
 
     const emailCell = document.createElement('td');
-    emailCell.textContent = userRecord.email || '';
+    let showEmail = '';
+    // Use the email only when it has real text.
+    if (hasText(userRecord.email)) {
+      showEmail = userRecord.email;
+    }
+    emailCell.textContent = showEmail;
     emailCell.className = 'text-muted';
 
     const roleCell = document.createElement('td');
-    roleCell.textContent = userRecord.roleId || 'customer';
+    let showRole = 'user';
+    // Use the stored role only when it has real text.
+    if (hasText(userRecord.roleId)) {
+      showRole = userRecord.roleId;
+    }
+    roleCell.textContent = showRole;
 
     const entriesCell = document.createElement('td');
     entriesCell.className = 'text-end';
@@ -366,12 +436,30 @@ function renderRecentEntries() {
 
     const title = document.createElement('h5');
     title.className = 'journal-item-title';
-    title.textContent = entry.header === '' || entry.header === undefined ? 'Untitled' : entry.header;
+    let titleText = 'Untitled';
+    // Use the entry header only when it has real text.
+    if (hasText(entry.header)) {
+      titleText = entry.header;
+    }
+    title.textContent = titleText;
 
     const meta = document.createElement('span');
     meta.className = 'journal-item-date';
-    const createdDate = entryTime(entry) === 0 ? null : new Date(entryTime(entry));
-    meta.textContent = (author ? author + ' \u2014 ' : '') + (createdDate === null ? 'Unknown date' : createdDate.toLocaleString());
+    let createdDate = null;
+    if (entryTime(entry) !== 0) {
+      createdDate = new Date(entryTime(entry));
+    }
+    let metaText = '';
+    // Show the author name only when it has real text.
+    if (hasText(author)) {
+      metaText = author + ' - ';
+    }
+    if (createdDate === null) {
+      metaText = metaText + 'Unknown date';
+    } else {
+      metaText = metaText + createdDate.toLocaleString();
+    }
+    meta.textContent = metaText;
 
     main.appendChild(title);
     main.appendChild(meta);
@@ -408,7 +496,15 @@ function renderRecentEntries() {
 function findAuthorName(uid) {
   for (let i = 0; i < allUsers.length; i++) {
     if (allUsers[i].id === uid) {
-      return allUsers[i].displayName || allUsers[i].email;
+      // Use the display name when it has real text.
+      if (hasText(allUsers[i].displayName)) {
+        return allUsers[i].displayName;
+      }
+      // Fall back to the email when the name is empty.
+      if (hasText(allUsers[i].email)) {
+        return allUsers[i].email;
+      }
+      return null;
     }
   }
   return null;
@@ -438,11 +534,36 @@ function fieldDateText(value) {
 }
 
 function openViewUser(userRecord) {
-  viewUserId.textContent = userRecord.id || '-';
-  viewUserUid.textContent = userRecord.uid || '-';
-  viewUserName.textContent = userRecord.displayName || '-';
-  viewUserEmail.textContent = userRecord.email || '-';
-  viewUserRole.textContent = userRecord.roleId || 'customer';
+  let viewIdText = '-';
+  // Show the id only when it has real text.
+  if (hasText(userRecord.id)) {
+    viewIdText = userRecord.id;
+  }
+  viewUserId.textContent = viewIdText;
+  let viewUidText = '-';
+  // Show the uid only when it has real text.
+  if (hasText(userRecord.uid)) {
+    viewUidText = userRecord.uid;
+  }
+  viewUserUid.textContent = viewUidText;
+  let viewNameText = '-';
+  // Show the display name only when it has real text.
+  if (hasText(userRecord.displayName)) {
+    viewNameText = userRecord.displayName;
+  }
+  viewUserName.textContent = viewNameText;
+  let viewEmailText = '-';
+  // Show the email only when it has real text.
+  if (hasText(userRecord.email)) {
+    viewEmailText = userRecord.email;
+  }
+  viewUserEmail.textContent = viewEmailText;
+  let viewRoleText = 'user';
+  // Show the role only when it has real text.
+  if (hasText(userRecord.roleId)) {
+    viewRoleText = userRecord.roleId;
+  }
+  viewUserRole.textContent = viewRoleText;
   viewUserCreated.textContent = fieldDateText(userRecord.createdAt);
   viewUserEntries.textContent = countEntriesForUser(userRecord.id);
   viewUserModal.show();
@@ -461,9 +582,23 @@ const userModal = new bootstrap.Modal(editUserModalEl);
 
 function openEditUser(userRecord) {
   editingUserId = userRecord.id;
-  editUserName.value = userRecord.displayName || '';
-  editUserEmail.value = userRecord.email || '';
-  editUserRole.value = isAdminRole(userRecord.roleId) ? 'admin' : 'customer';
+  let editNameText = '';
+  // Fill the name box only when the stored name has real text.
+  if (hasText(userRecord.displayName)) {
+    editNameText = userRecord.displayName;
+  }
+  editUserName.value = editNameText;
+  let editEmailText = '';
+  // Fill the email box only when the stored email has real text.
+  if (hasText(userRecord.email)) {
+    editEmailText = userRecord.email;
+  }
+  editUserEmail.value = editEmailText;
+  let editRoleText = 'user';
+  if (isAdminRole(userRecord.roleId)) {
+    editRoleText = 'admin';
+  }
+  editUserRole.value = editRoleText;
   userModal.show();
 }
 
@@ -554,8 +689,18 @@ function openEditEntry(id) {
   for (let i = 0; i < allEntries.length; i++) {
     if (allEntries[i].id === id) {
       editingEntryId = id;
-      editEntryHeader.value = allEntries[i].header || '';
-      editEntryContent.value = allEntries[i].content || '';
+      let editHeaderText = '';
+      // Fill the header box only when the stored header has real text.
+      if (hasText(allEntries[i].header)) {
+        editHeaderText = allEntries[i].header;
+      }
+      editEntryHeader.value = editHeaderText;
+      let editContentText = '';
+      // Fill the content box only when the stored content has real text.
+      if (hasText(allEntries[i].content)) {
+        editContentText = allEntries[i].content;
+      }
+      editEntryContent.value = editContentText;
       break;
     }
   }

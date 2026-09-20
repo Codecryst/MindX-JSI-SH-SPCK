@@ -4,11 +4,11 @@ import {
   doc,
   getDoc,
   signInWithEmailAndPassword,
+  signOut,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
 } from './firebase-config.js';
-import { startInactivityTimer } from './inactivity.js';
 
 // Get the elements from the page
 const form = document.getElementById('loginForm');
@@ -23,11 +23,24 @@ function showMessage(text, type) {
   messageBox.className = 'message-box show ' + type;
 }
 
-// 15 minute inactivity timeout: clear password and warn the user
-startInactivityTimer(function () {
-  passwordInput.value = '';
-  showMessage('Timed out after 15 minutes of inactivity. Please try again.', 'error');
-});
+// A user is roleId "user".
+function getRoleText(data) {
+  // Step 1: no profile data means user.
+  if (data === null || data === undefined) {
+    return 'user';
+  }
+  // Step 2: read only the roleId field.
+  let raw = data.roleId;
+  // Step 3: only text can be a role, else user.
+  if (typeof raw !== 'string') {
+    return 'user';
+  }
+  return raw.trim().toLowerCase();
+}
+
+function isAdminRole(roleText) {
+  return roleText === 'admin' || roleText === 'administrator';
+}
 
 // When the login page opens: if we remembered the account before,
 // put it back into the form so the user does not have to type again.
@@ -49,7 +62,7 @@ form.addEventListener('submit', async function (event) {
 
   try {
     // 2. Choose how long Firebase keeps this login
-    if (rememberMe === true) {
+    if (rememberMe) {
       // Remembered: stays logged in even after closing the browser
       await setPersistence(auth, browserLocalPersistence);
     } else {
@@ -62,7 +75,7 @@ form.addEventListener('submit', async function (event) {
 
     // 4. Save or remove the saved account depending on the checkbox
     const account = { email: email, password: password };
-    if (rememberMe === true) {
+    if (rememberMe) {
       // localStorage survives closing the website, so the account
       // is loaded again every time the site is visited
       localStorage.setItem('mindlog_account', JSON.stringify(account));
@@ -77,15 +90,18 @@ form.addEventListener('submit', async function (event) {
     let nextPage = 'user.html';
     try {
       const profile = await getDoc(doc(db, 'users', userCredential.user.uid));
-      if (profile.exists()) {
-        const data = profile.data();
-        let raw = data.roleId;
-        if (raw === undefined || raw === null || raw === '') {
-          raw = data.role;
-        }
-        if (typeof raw === 'string' && (raw.trim().toLowerCase() === 'admin' || raw.trim().toLowerCase() === 'administrator')) {
-          nextPage = 'admin.html';
-        }
+      if (!profile.exists()) {
+        // Glitch means Auth exists but no users doc, so stay logged out.
+        await signOut(auth);
+        showMessage('Account glitch: profile not found. Please register again.', 'error');
+        return;
+      }
+      const data = profile.data();
+      let roleText = getRoleText(data);
+      if (isAdminRole(roleText)) {
+        nextPage = 'admin.html';
+      } else {
+        nextPage = 'user.html';
       }
     } catch (error) {
       console.log('Cannot read role, going to user page:', error);
