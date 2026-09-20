@@ -134,9 +134,6 @@ h1 {
 
 .auth-page {
     min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     background: linear-gradient(#f5f0e8, #efe7da);
     padding: 24px;
 }
@@ -144,6 +141,9 @@ h1 {
 .auth-shell {
     width: 100%;
     max-width: 430px;
+    margin: 0 auto;
+    padding-top: 60px; /* space for navbar */
+    padding-bottom: 60px;
 }
 
 .auth-card {
