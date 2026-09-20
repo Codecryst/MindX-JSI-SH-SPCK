@@ -108,6 +108,7 @@ onAuthStateChanged(auth, async function (user) {
 
   // Read the user profile from Firestore to show the display name
   let name = user.email;
+  let userData = null;
   try {
     const profileDoc = await getDoc(doc(db, 'users', user.uid));
     if (!profileDoc.exists()) {
@@ -120,12 +121,17 @@ onAuthStateChanged(auth, async function (user) {
       window.location.href = 'login.html';
       return;
     }
-    const data = profileDoc.data();
-    if (data.displayName) {
-      name = data.displayName;
+    userData = profileDoc.data();
+    if (userData.displayName) {
+      name = userData.displayName;
+    }
+    // Check if user is deactivated
+    if (userData.deactivated === true) {
+      showDeactivatedScreen();
+      return;
     }
     // Small link back to dashboard, only for admins
-    let roleText = getRoleText(data);
+    let roleText = getRoleText(userData);
     if (isAdminRole(roleText)) {
       if (dashboardLink !== null) {
         dashboardLink.classList.remove('d-none');
@@ -158,6 +164,31 @@ onAuthStateChanged(auth, async function (user) {
   }
   renderEntries();
 });
+
+// Show deactivated screen blocking the journal
+function showDeactivatedScreen() {
+  // Hide the journal shell
+  const journalShell = document.querySelector('.journal-shell');
+  if (journalShell) {
+    journalShell.style.display = 'none';
+  }
+
+  // Create and show deactivated message
+  const container = document.querySelector('main') || document.body;
+  const deactivatedDiv = document.createElement('div');
+  deactivatedDiv.className = 'container text-center py-5';
+  deactivatedDiv.innerHTML = `
+    <div class="card auth-card" style="max-width: 500px; margin: 0 auto;">
+      <div class="card-body p-4 p-md-5">
+        <h2 class="text-danger mb-3">Account Deactivated</h2>
+        <p class="text-muted mb-4">Your account has been deactivated by an administrator.</p>
+        <p class="text-muted mb-4">You can no longer access your journal.</p>
+        <a href="feedback.html" class="btn btn-primary">Send Feedback / Appeal</a>
+      </div>
+    </div>
+  `;
+  container.appendChild(deactivatedDiv);
+}
 
 // ---------- Entries part ----------
 // Every entry is one document inside the "userUsage" collection.

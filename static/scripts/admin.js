@@ -9,6 +9,8 @@ import {
   updateDoc,
   deleteDoc,
   signOut,
+  query,
+  orderBy,
 } from './firebase-config.js';
 
 // ---------- Login check part ----------
@@ -18,6 +20,7 @@ const logoutBtn = document.getElementById('logoutBtn');
 const restrictedBanner = document.getElementById('restrictedBanner');
 const usersTableBody = document.getElementById('usersTableBody');
 const recentList = document.getElementById('recentList');
+const feedbackTableBody = document.getElementById('feedbackTableBody');
 const statUsers = document.getElementById('statUsers');
 const statEntries = document.getElementById('statEntries');
 const statWriters = document.getElementById('statWriters');
@@ -27,6 +30,7 @@ const refreshBtn = document.getElementById('refreshBtn');
 let isAdmin = false; // becomes true only when the role is admin
 let allUsers = []; // every account from the "users" collection
 let allEntries = []; // every entry from the "userUsage" collection
+let allFeedback = []; // every feedback from the "feedback" collection
 let currentUid = null; // uid of the admin who is logged in now
 
 // Tiny helper: true only when a value is real text (not empty, not missing).
@@ -161,6 +165,7 @@ function showDeniedView(name, role) {
 async function loadAdminData() {
   const usersSnapshot = await getDocs(collection(db, 'users'));
   const entriesSnapshot = await getDocs(collection(db, 'userUsage'));
+  const feedbackSnapshot = await getDocs(query(collection(db, 'feedback'), orderBy('severity', 'desc')));
 
   allUsers = [];
   usersSnapshot.forEach(function (oneDoc) {
@@ -197,9 +202,23 @@ async function loadAdminData() {
     });
   });
 
+  allFeedback = [];
+  feedbackSnapshot.forEach(function (oneDoc) {
+    const data = oneDoc.data();
+    allFeedback.push({
+      id: oneDoc.id,
+      email: data.email,
+      title: data.title,
+      content: data.content,
+      severity: data.severity,
+      createdAt: data.createdAt,
+    });
+  });
+
   renderStats();
   renderUsersTable();
   renderRecentEntries();
+  renderFeedback();
 }
 
 // If Firebase refuses to load (rules / offline), show a friendly message
@@ -208,6 +227,10 @@ function showLoadError() {
     '<tr><td colspan="6" class="text-danger">Could not load users. Check Firestore rules allow admin to read the users and userUsage collections, and check your connection.</td></tr>';
   recentList.innerHTML =
     '<p class="text-danger small">Could not load entries. Check Firestore rules and your connection.</p>';
+  if (feedbackTableBody) {
+    feedbackTableBody.innerHTML =
+      '<tr><td colspan="6" class="text-danger">Could not load feedback. Check Firestore rules and your connection.</td></tr>';
+  }
   statUsers.textContent = '0';
   statEntries.textContent = '0';
   statWriters.textContent = '0';
@@ -357,6 +380,19 @@ function renderUsersTable() {
     }
     roleCell.textContent = showRole;
 
+    const statusCell = document.createElement('td');
+    if (userRecord.deactivated === true) {
+      const badge = document.createElement('span');
+      badge.className = 'badge bg-danger';
+      badge.textContent = 'Deactivated';
+      statusCell.appendChild(badge);
+    } else {
+      const badge = document.createElement('span');
+      badge.className = 'badge bg-success';
+      badge.textContent = 'Active';
+      statusCell.appendChild(badge);
+    }
+
     const entriesCell = document.createElement('td');
     entriesCell.className = 'text-end';
     entriesCell.textContent = countEntriesForUser(userRecord.id);
@@ -380,28 +416,32 @@ function renderUsersTable() {
       openViewUser(userRecord);
     });
 
-    const deleteUserBtn = document.createElement('button');
-    deleteUserBtn.type = 'button';
-    deleteUserBtn.className = 'btn btn-danger btn-sm';
-    deleteUserBtn.textContent = 'Delete';
-    // Student rule: never delete an admin account, including your own.
+    const deactivateUserBtn = document.createElement('button');
+    deactivateUserBtn.type = 'button';
+    deactivateUserBtn.className = 'btn btn-danger btn-sm';
+    deactivateUserBtn.textContent = 'Deactivate';
+    // Admin accounts cannot be deactivated.
     if (isAdminRole(userRecord.roleId)) {
-      deleteUserBtn.disabled = true;
-      deleteUserBtn.title = 'Admin accounts cannot be deleted.';
+      deactivateUserBtn.disabled = true;
+      deactivateUserBtn.title = 'Admin accounts cannot be deactivated.';
+    } else if (userRecord.deactivated === true) {
+      deactivateUserBtn.disabled = true;
+      deactivateUserBtn.title = 'User is already deactivated.';
     } else {
-      deleteUserBtn.addEventListener('click', function () {
-        deleteUser(userRecord);
+      deactivateUserBtn.addEventListener('click', function () {
+        deactivateUser(userRecord);
       });
     }
 
     actionsCell.appendChild(viewUserBtn);
     actionsCell.appendChild(editUserBtn);
-    actionsCell.appendChild(deleteUserBtn);
+    actionsCell.appendChild(deactivateUserBtn);
 
     row.appendChild(numberCell);
     row.appendChild(nameCell);
     row.appendChild(emailCell);
     row.appendChild(roleCell);
+    row.appendChild(statusCell);
     row.appendChild(entriesCell);
     row.appendChild(actionsCell);
 
@@ -492,6 +532,66 @@ function renderRecentEntries() {
   });
 }
 
+// ---------- Feedback part ----------
+function renderFeedback() {
+  if (!feedbackTableBody) return;
+  feedbackTableBody.innerHTML = '';
+
+  if (allFeedback.length === 0) {
+    const empty = document.createElement('tr');
+    empty.innerHTML = '<td colspan="6" class="text-muted">No feedback submitted yet.</td>';
+    feedbackTableBody.appendChild(empty);
+    return;
+  }
+
+  allFeedback.forEach(function (fb, index) {
+    const row = document.createElement('tr');
+
+    const numberCell = document.createElement('td');
+    numberCell.textContent = index + 1;
+
+    const titleCell = document.createElement('td');
+    titleCell.textContent = fb.title || '-';
+
+    const emailCell = document.createElement('td');
+    emailCell.textContent = fb.email || '-';
+    emailCell.className = 'text-muted';
+
+    const severityCell = document.createElement('td');
+    severityCell.className = 'text-center';
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    if (fb.severity >= 8) badge.classList.add('bg-danger');
+    else if (fb.severity >= 5) badge.classList.add('bg-warning');
+    else badge.classList.add('bg-info');
+    badge.textContent = fb.severity + '/10';
+    severityCell.appendChild(badge);
+
+    const dateCell = document.createElement('td');
+    if (fb.createdAt && typeof fb.createdAt.toDate === 'function') {
+      dateCell.textContent = fb.createdAt.toDate().toLocaleString();
+    } else {
+      dateCell.textContent = '-';
+    }
+
+    const contentCell = document.createElement('td');
+    contentCell.textContent = fb.content || '-';
+    contentCell.style.maxWidth = '300px';
+    contentCell.style.whiteSpace = 'nowrap';
+    contentCell.style.overflow = 'hidden';
+    contentCell.style.textOverflow = 'ellipsis';
+
+    row.appendChild(numberCell);
+    row.appendChild(titleCell);
+    row.appendChild(emailCell);
+    row.appendChild(severityCell);
+    row.appendChild(dateCell);
+    row.appendChild(contentCell);
+
+    feedbackTableBody.appendChild(row);
+  });
+}
+
 // Look up the display name of the owner of an entry
 function findAuthorName(uid) {
   for (let i = 0; i < allUsers.length; i++) {
@@ -566,6 +666,15 @@ function openViewUser(userRecord) {
   viewUserRole.textContent = viewRoleText;
   viewUserCreated.textContent = fieldDateText(userRecord.createdAt);
   viewUserEntries.textContent = countEntriesForUser(userRecord.id);
+  // Show deactivated status
+  const viewUserDeactivated = document.getElementById('viewUserDeactivated');
+  if (viewUserDeactivated) {
+    if (userRecord.deactivated === true) {
+      viewUserDeactivated.innerHTML = '<span class="badge bg-danger">Deactivated</span>';
+    } else {
+      viewUserDeactivated.innerHTML = '<span class="badge bg-success">Active</span>';
+    }
+  }
   viewUserModal.show();
 }
 
@@ -625,37 +734,30 @@ saveUserBtn.addEventListener('click', async function () {
   }
 });
 
-// Remove a user profile together with all of their entries
-// Rule: admin accounts cannot be deleted, not even by another admin.
-async function deleteUser(userRecord) {
+// Deactivate a user (sets deactivated: true instead of deleting)
+async function deactivateUser(userRecord) {
   if (isAdminRole(userRecord.roleId)) {
-    alert('Cannot delete this user because it is an admin account.');
+    alert('Cannot deactivate this user because it is an admin account.');
     return;
   }
   if (userRecord.id === currentUid) {
-    alert('Cannot delete your own admin account while you are logged in.');
+    alert('Cannot deactivate your own admin account while you are logged in.');
     return;
   }
-  const confirmed = confirm('Delete this user? All of their entries will also be removed.');
+  const confirmed = confirm('Deactivate this user? They will not be able to access their journal.');
   if (confirmed === false) {
     return;
   }
 
   try {
-    // Remove every entry that belongs to this user first
-    for (let i = 0; i < allEntries.length; i++) {
-      if (allEntries[i].uid === userRecord.id) {
-        await deleteDoc(doc(db, 'userUsage', allEntries[i].id));
-      }
-    }
-
-    // Then remove the user profile document
-    await deleteDoc(doc(db, 'users', userRecord.id));
+    await updateDoc(doc(db, 'users', userRecord.id), {
+      deactivated: true,
+    });
 
     await loadAdminData();
   } catch (error) {
     console.log(error.code, error.message);
-    alert('Could not delete the user. Check Firestore rules.');
+    alert('Could not deactivate the user. Check Firestore rules.');
   }
 }
 

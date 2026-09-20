@@ -19,6 +19,7 @@
                     <li class="nav-item"><a class="nav-link active" href="admin.html">Dashboard</a></li>
                     <li class="nav-item"><a class="nav-link" href="#users">Users</a></li>
                     <li class="nav-item"><a class="nav-link" href="#recent">Entries</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#feedback">Feedback</a></li>
                     <li class="nav-item"><a class="nav-link" href="index.html">View site</a></li>
                 </ul>
                 <div class="d-flex gap-2 align-items-center">
@@ -89,7 +90,7 @@
 
         <section id="users" class="info-box">
             <h2>Registered users</h2>
-            <p class="text-muted">Every account in the <code>users</code> collection. You can edit a profile or delete a user together with their entries.</p>
+            <p class="text-muted">Every account in the <code>users</code> collection. You can edit a profile or deactivate a user.</p>
             <div class="table-box">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
@@ -99,12 +100,13 @@
                                 <th scope="col">Name</th>
                                 <th scope="col">Email</th>
                                 <th scope="col">Role</th>
+                                <th scope="col">Status</th>
                                 <th scope="col" class="text-end">Entries</th>
                                 <th scope="col" class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="usersTableBody">
-                            <tr><td colspan="6" class="text-muted">Loading users...</td></tr>
+                            <tr><td colspan="7" class="text-muted">Loading users...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -116,6 +118,30 @@
             <p class="text-muted">The newest notes that people saved. You can edit their content or remove them.</p>
             <div id="recentList" class="recent-list">
                 <p class="text-muted small">Loading entries...</p>
+            </div>
+        </section>
+
+        <section id="feedback" class="info-box">
+            <h2>Feedback</h2>
+            <p class="text-muted">User feedback sorted by severity (highest first).</p>
+            <div class="table-box">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">Title</th>
+                                <th scope="col">Email</th>
+                                <th scope="col" class="text-center">Severity</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">Content</th>
+                            </tr>
+                        </thead>
+                        <tbody id="feedbackTableBody">
+                            <tr><td colspan="6" class="text-muted">Loading feedback...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
     </main>
@@ -137,6 +163,7 @@
                             <tr><th scope="row">displayName</th><td id="viewUserName" class="text-break">-</td></tr>
                             <tr><th scope="row">email</th><td id="viewUserEmail" class="text-break">-</td></tr>
                             <tr><th scope="row">roleId</th><td id="viewUserRole" class="text-break">-</td></tr>
+                            <tr><th scope="row">deactivated</th><td id="viewUserDeactivated" class="text-break">-</td></tr>
                             <tr><th scope="row">createdAt</th><td id="viewUserCreated" class="text-break">-</td></tr>
                             <tr><th scope="row">Entries</th><td id="viewUserEntries">-</td></tr>
                         </tbody>
