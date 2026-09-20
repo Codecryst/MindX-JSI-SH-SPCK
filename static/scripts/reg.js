@@ -1,3 +1,8 @@
+// Register page script
+// Handles new user registration with email/password, validates password strength,
+// creates Firebase Auth account and Firestore profile, redirects to user.html
+
+// Import Firebase services and functions from our config file
 import {
   auth,
   db,
@@ -10,9 +15,9 @@ import {
   serverTimestamp,
 } from './firebase-config.js';
 
-// Get the elements from the page
-const form = document.getElementById('registerForm');
-const messageBox = document.getElementById('messageBox');
+// Get the HTML elements from the page
+const form = document.getElementById('registerForm');  // The registration form
+const messageBox = document.getElementById('messageBox'); // Message display area
 
 // Small helper to show a message (uses .show .error .success classes)
 function showMessage(text, type) {
@@ -41,9 +46,10 @@ function checkPassword(password) {
   if (/[^A-Za-z0-9]/.test(password) === false) {
     return 'Password must have at least 1 symbol (example: ! @ # $).';
   }
-  return '';
+  return ''; // Empty string means password is valid
 }
 
+// Handle form submission when user clicks Register button
 form.addEventListener('submit', async function (event) {
   event.preventDefault(); // stop the page from reloading
 
@@ -92,8 +98,8 @@ form.addEventListener('submit', async function (event) {
       uid: user.uid,
       email: email,
       displayName: displayName,
-      roleId: 'user',
-      createdAt: serverTimestamp(),
+      roleId: 'user',           // New users start as regular users
+      createdAt: serverTimestamp(), // Server sets the creation time
     });
 
     // 6. Save or remove the saved account depending on the checkbox

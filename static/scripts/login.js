@@ -1,3 +1,8 @@
+// Login page script
+// Handles user sign in with email/password, remembers account if checkbox checked,
+// redirects to admin.html for admins or user.html for regular users
+
+// Import Firebase services and functions from our config file
 import {
   auth,
   db,
@@ -10,12 +15,12 @@ import {
   browserSessionPersistence,
 } from './firebase-config.js';
 
-// Get the elements from the page
-const form = document.getElementById('loginForm');
-const messageBox = document.getElementById('messageBox');
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
-const rememberMeBox = document.getElementById('rememberMe');
+// Get the HTML elements from the page
+const form = document.getElementById('loginForm');           // The login form
+const messageBox = document.getElementById('messageBox');    // Message display area
+const emailInput = document.getElementById('email');         // Email input field
+const passwordInput = document.getElementById('password');   // Password input field
+const rememberMeBox = document.getElementById('rememberMe'); // Remember me checkbox
 
 // Small helper to show a message (uses .show .error .success classes)
 function showMessage(text, type) {
@@ -52,6 +57,7 @@ if (savedAccount !== null) {
   rememberMeBox.checked = true;
 }
 
+// Handle form submission when user clicks Login button
 form.addEventListener('submit', async function (event) {
   event.preventDefault(); // stop the page from reloading
 

@@ -522,7 +522,7 @@ const viewUserEntries = document.getElementById('viewUserEntries');
 
 const viewUserModal = new bootstrap.Modal(viewUserModalEl);
 
-// Simple student-level date text: Firestore Timestamp -> local string
+// Date text: Firestore Timestamp -> local string
 function fieldDateText(value) {
   if (value === null || value === undefined) {
     return '-';
@@ -573,7 +573,6 @@ function openViewUser(userRecord) {
 const editUserModalEl = document.getElementById('editUserModal');
 const editUserName = document.getElementById('editUserName');
 const editUserEmail = document.getElementById('editUserEmail');
-const editUserRole = document.getElementById('editUserRole');
 const saveUserBtn = document.getElementById('saveUserBtn');
 
 let editingUserId = null; // id of the user document being edited
@@ -594,11 +593,6 @@ function openEditUser(userRecord) {
     editEmailText = userRecord.email;
   }
   editUserEmail.value = editEmailText;
-  let editRoleText = 'user';
-  if (isAdminRole(userRecord.roleId)) {
-    editRoleText = 'admin';
-  }
-  editUserRole.value = editRoleText;
   userModal.show();
 }
 
@@ -608,7 +602,6 @@ saveUserBtn.addEventListener('click', async function () {
   }
 
   const newName = editUserName.value.trim();
-  const newRole = editUserRole.value;
 
   if (newName === '') {
     alert('Display name cannot be empty.');
@@ -619,18 +612,9 @@ saveUserBtn.addEventListener('click', async function () {
     return;
   }
 
-  // Same rule as delete: do not demote an admin, or it could be deleted after.
-  for (let i = 0; i < allUsers.length; i++) {
-    if (allUsers[i].id === editingUserId && isAdminRole(allUsers[i].roleId) && isAdminRole(newRole) === false) {
-      alert('Cannot change this user because it is an admin account.');
-      return;
-    }
-  }
-
   try {
     await updateDoc(doc(db, 'users', editingUserId), {
       displayName: newName,
-      roleId: newRole,
     });
 
     userModal.hide();

@@ -1,3 +1,8 @@
+// User journal page script
+// Handles the user's personal journal: list entries on the left, editor on the right
+// Users can create, edit, and delete their own entries
+
+// Import Firebase services and functions from our config file
 import {
   auth,
   db,
@@ -15,13 +20,50 @@ import {
   serverTimestamp,
 } from './firebase-config.js';
 
-// ---------- Account part ----------
-const accountAvatar = document.getElementById('accountAvatar');
-const accountName = document.getElementById('accountName');
-const dashboardLink = document.getElementById('dashboardLink');
-const logoutBtn = document.getElementById('logoutBtn');
+// ---------- Top Navbar part ----------
+// Get the HTML elements for the top navigation bar
+const navAccount = document.getElementById('navAccount');         // Account dropdown container
+const navAvatar = document.getElementById('navAvatar');           // Avatar circle with initial
+const navName = document.getElementById('navName');               // Display name in navbar
+const navLogoutBtn = document.getElementById('navLogoutBtn');     // Logout button in navbar
 
-// Logout button next to the account -> end session and go to index
+// d-none means hidden and d-flex means shown as a flex row.
+function showBox(el) {
+  if (el === null || el === undefined) {
+    return;
+  }
+  el.classList.remove('d-none');
+  el.classList.add('d-flex');
+}
+
+function hideBox(el) {
+  if (el === null || el === undefined) {
+    return;
+  }
+  el.classList.add('d-none');
+  el.classList.remove('d-flex');
+}
+
+// Logout button in top navbar -> end session and go to index
+if (navLogoutBtn !== null) {
+  navLogoutBtn.addEventListener('click', async function () {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.log(error);
+    }
+    window.location.href = 'index.html';
+  });
+}
+
+// ---------- Sidebar Account part ----------
+// Get the HTML elements for the sidebar account display
+const accountAvatar = document.getElementById('accountAvatar');     // Avatar circle with initial
+const accountName = document.getElementById('accountName');         // Display name
+const dashboardLink = document.getElementById('dashboardLink');     // Admin dashboard link (hidden for regular users)
+const logoutBtn = document.getElementById('logoutBtn');             // Logout button
+
+// Logout button in sidebar -> end session and go to index
 if (logoutBtn !== null) {
   logoutBtn.addEventListener('click', async function () {
     try {
@@ -95,9 +137,19 @@ onAuthStateChanged(auth, async function (user) {
     console.log('Cannot read user profile:', error);
   }
 
+  // Update sidebar account display
   accountName.textContent = name;
   accountName.title = name;
   accountAvatar.textContent = name.charAt(0).toUpperCase();
+
+  // Update top navbar account display
+  if (navAvatar !== null && navName !== null && navAccount !== null && navLogoutBtn !== null) {
+    navAvatar.textContent = name.charAt(0).toUpperCase();
+    navName.textContent = name;
+    navName.title = name;
+    showBox(navAccount);
+    showBox(navLogoutBtn);
+  }
 
   try {
     await loadEntries();
@@ -111,18 +163,21 @@ onAuthStateChanged(auth, async function (user) {
 // Every entry is one document inside the "userUsage" collection.
 // Document name: userId_entryNumber  (example: abc123_1)
 // Fields: header, content, createdAt (timestamp), uid
-const entriesList = document.getElementById('entriesList');
-const newEntryBtn = document.getElementById('newEntryBtn');
-const clearEditorBtn = document.getElementById('clearEditorBtn');
-const saveEntryBtn = document.getElementById('saveEntryBtn');
-const entryHeader = document.getElementById('entryHeader');
-const entryContent = document.getElementById('entryContent');
+
+// Get the HTML elements for the entries UI
+const entriesList = document.getElementById('entriesList');       // Left sidebar list of entries
+const newEntryBtn = document.getElementById('newEntryBtn');       // New entry button
+const clearEditorBtn = document.getElementById('clearEditorBtn'); // Clear editor button
+const saveEntryBtn = document.getElementById('saveEntryBtn');     // Save entry button
+const entryHeader = document.getElementById('entryHeader');       // Header input field
+const entryContent = document.getElementById('entryContent');     // Content textarea
 
 let myEntries = []; // entries of this user, loaded from Firebase
 let selectedId = null; // document name of the entry currently open
 
 // Load this user's entries from the "userUsage" collection
 async function loadEntries() {
+  // Query for entries where uid matches current user
   const foundQuery = query(collection(db, 'userUsage'), where('uid', '==', currentUserId));
   const entriesSnapshot = await getDocs(foundQuery);
 
