@@ -1,2 +1,1 @@
-<script>windows.location.href="https://codecryst.github.io/MindX-JSI-SH-SPCK"</script>
 <a href="https://codecryst.github.io/MindX-JSI-SH-SPCK">https://codecryst.github.io/MindX-JSI-SH-SPCK</a>
