@@ -30,6 +30,7 @@ import {
   deleteDoc,
   query,
   where,
+  orderBy,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
@@ -72,5 +73,6 @@ export {
   deleteDoc,
   query,
   where,
+  orderBy,
   serverTimestamp,
 };
