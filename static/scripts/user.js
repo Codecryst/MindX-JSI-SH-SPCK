@@ -167,27 +167,43 @@ onAuthStateChanged(auth, async function (user) {
 
 // Show deactivated screen blocking the journal
 function showDeactivatedScreen() {
-  // Hide the journal shell
+  // Hide the whole journal UI so the user cannot use it
   const journalShell = document.querySelector('.journal-shell');
   if (journalShell) {
     journalShell.style.display = 'none';
   }
 
-  // Create and show deactivated message
-  const container = document.querySelector('main') || document.body;
-  const deactivatedDiv = document.createElement('div');
-  deactivatedDiv.className = 'container text-center py-5';
-  deactivatedDiv.innerHTML = `
-    <div class="card auth-card" style="max-width: 500px; margin: 0 auto;">
-      <div class="card-body p-4 p-md-5">
-        <h2 class="text-danger mb-3">Account Deactivated</h2>
-        <p class="text-muted mb-4">Your account has been deactivated by an administrator.</p>
-        <p class="text-muted mb-4">You can no longer access your journal.</p>
-        <a href="feedback.html" class="btn btn-primary">Send Feedback / Appeal</a>
+  // Build the blocking screen and add it to the page body.
+  // Important: NOT inside the hidden journal shell, or the message would be invisible.
+  const overlay = document.createElement('div');
+  overlay.className = 'deactivated-overlay';
+  overlay.innerHTML = `
+    <div class="card auth-card deactivated-card">
+      <div class="card-body p-4 p-md-5 text-center">
+        <h2 class="text-danger mb-3">Account deactivated</h2>
+        <p class="text-muted mb-2">Your account has been deactivated by an administrator.</p>
+        <p class="text-muted mb-4">You can no longer use the journal, but you can still send us feedback.</p>
+        <div class="d-flex justify-content-center gap-2 flex-wrap">
+          <a href="feedback.html" class="btn btn-primary">Send Feedback / Appeal</a>
+          <button type="button" class="btn btn-outline-secondary" id="deactivatedLogoutBtn">Logout</button>
+        </div>
       </div>
     </div>
   `;
-  container.appendChild(deactivatedDiv);
+  document.body.appendChild(overlay);
+
+  // Logout button so the deactivated user can leave this page
+  const deactivatedLogoutBtn = document.getElementById('deactivatedLogoutBtn');
+  if (deactivatedLogoutBtn !== null) {
+    deactivatedLogoutBtn.addEventListener('click', async function () {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.log(error);
+      }
+      window.location.href = 'index.html';
+    });
+  }
 }
 
 // ---------- Entries part ----------

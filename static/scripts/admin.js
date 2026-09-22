@@ -187,6 +187,7 @@ async function loadAdminData() {
       displayName: data.displayName,
       roleId: getRoleText(data),
       createdAt: userCreatedAt,
+      deactivated: data.deactivated === true,
     });
   });
 
@@ -420,13 +421,16 @@ function renderUsersTable() {
     deactivateUserBtn.type = 'button';
     deactivateUserBtn.className = 'btn btn-danger btn-sm';
     deactivateUserBtn.textContent = 'Deactivate';
-    // Admin accounts cannot be deactivated.
+    // Admin accounts cannot be deactivated. Deactivated users get a Reactivate button.
     if (isAdminRole(userRecord.roleId)) {
       deactivateUserBtn.disabled = true;
       deactivateUserBtn.title = 'Admin accounts cannot be deactivated.';
     } else if (userRecord.deactivated === true) {
-      deactivateUserBtn.disabled = true;
-      deactivateUserBtn.title = 'User is already deactivated.';
+      deactivateUserBtn.className = 'btn btn-success btn-sm';
+      deactivateUserBtn.textContent = 'Reactivate';
+      deactivateUserBtn.addEventListener('click', function () {
+        reactivateUser(userRecord);
+      });
     } else {
       deactivateUserBtn.addEventListener('click', function () {
         deactivateUser(userRecord);
@@ -758,6 +762,25 @@ async function deactivateUser(userRecord) {
   } catch (error) {
     console.log(error.code, error.message);
     alert('Could not deactivate the user. Check Firestore rules.');
+  }
+}
+
+// Reactivate a user (sets deactivated: false so they can use the journal again)
+async function reactivateUser(userRecord) {
+  const confirmed = confirm('Reactivate this user? They will be able to access their journal again.');
+  if (confirmed === false) {
+    return;
+  }
+
+  try {
+    await updateDoc(doc(db, 'users', userRecord.id), {
+      deactivated: false,
+    });
+
+    await loadAdminData();
+  } catch (error) {
+    console.log(error.code, error.message);
+    alert('Could not reactivate the user. Check Firestore rules.');
   }
 }
 
