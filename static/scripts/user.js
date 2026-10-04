@@ -356,10 +356,13 @@ async function deleteEntry(id) {
   try {
     await deleteDoc(doc(db, 'userUsage', id));
 
+    // Always reload the list so the deleted entry disappears from the sidebar.
+    await loadEntries();
+
     if (selectedId === id) {
+      // The entry that was open is gone, so empty the editor too.
       clearEditor();
     } else {
-      await loadEntries();
       renderEntries();
     }
   } catch (error) {

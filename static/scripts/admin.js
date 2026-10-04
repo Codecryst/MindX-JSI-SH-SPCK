@@ -141,11 +141,7 @@ logoutBtn.addEventListener('click', async function () {
 // Block the dashboard for regular users
 function showDeniedView(name, role) {
   restrictedBanner.textContent =
-    'Access denied: this control dashboard is for admins only. Your account "' +
-    name +
-    '" has role "' +
-    role +
-    '". To fix it, open Firestore -> users -> your uid and set roleId to "admin", then reload.';
+    'Access denied: this dashboard is for admins only. You are signed in as "' + name + '".';
   restrictedBanner.className = 'message-box show error';
   accessLine.textContent = 'Only admin accounts can view and change user data. Your display name is not your role.';
 
